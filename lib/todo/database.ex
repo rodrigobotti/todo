@@ -1,6 +1,11 @@
 defmodule Todo.Database do
   use GenServer
+
+  alias Todo.DatabaseWorker, as: Worker
+
   @db_folder "./persist"
+  @pool_size 3
+
   def start do
     GenServer.start(__MODULE__, nil, name: __MODULE__)
   end
@@ -13,39 +18,37 @@ defmodule Todo.Database do
     GenServer.call(__MODULE__, {:get, key})
   end
 
+  @impl GenServer
   def init(_) do
     File.mkdir_p!(@db_folder)
-    {:ok, nil}
+    worker_pool = spawn_workers()
+    {:ok, worker_pool}
   end
 
-  def handle_cast({:store, key, data}, state) do
-    # database worker per request
-    spawn(fn ->
-      key
-      |> file_name()
-      |> File.write!(:erlang.term_to_binary(data))
+  @impl GenServer
+  def handle_cast({:store, key, data}, worker_pool) do
+    worker_pid = choose_worker(worker_pool, key)
+    Worker.store(worker_pid, key, data)
+    {:noreply, worker_pool}
+  end
+
+  @impl GenServer
+  def handle_call({:get, key}, _from, worker_pool) do
+    worker_pid = choose_worker(worker_pool, key)
+    data = Worker.get(worker_pid, key)
+    {:reply, data, worker_pool}
+  end
+
+  def choose_worker(worker_pool, key) do
+    index = :erlang.phash2(to_string(key), @pool_size)
+    Map.get(worker_pool, index)
+  end
+
+  def spawn_workers do
+    0..(@pool_size - 1)
+    |> Enum.reduce(%{}, fn index, map ->
+      {:ok, worker_pid} = Worker.start(@db_folder)
+      Map.put(map, index, worker_pid)
     end)
-
-    {:noreply, state}
-  end
-
-  def handle_call({:get, key}, caller, state) do
-    spawn(fn ->
-      data =
-        case File.read(file_name(key)) do
-          {:ok, contents} -> :erlang.binary_to_term(contents)
-          _ -> nil
-        end
-
-      # responding from spawned worker process
-      GenServer.reply(caller, data)
-    end)
-
-    # no reply from the database process
-    {:noreply, state}
-  end
-
-  defp file_name(key) do
-    Path.join(@db_folder, to_string(key))
   end
 end
