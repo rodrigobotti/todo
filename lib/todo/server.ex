@@ -1,10 +1,12 @@
 defmodule Todo.Server do
   use GenServer
 
+  alias Todo.Database, as: DB
+
   # Api
 
-  def start() do
-    GenServer.start(__MODULE__, nil)
+  def start(name) do
+    GenServer.start(__MODULE__, name)
   end
 
   def add_entry(pid, entry) do
@@ -30,32 +32,44 @@ defmodule Todo.Server do
   # Server
 
   @impl GenServer
-  def init(_init_arg) do
-    {:ok, Todo.List.new()}
+  def init(name) do
+    send(self(), :long_running_init)
+    {:ok, {name, nil}}
   end
 
   @impl GenServer
-  def handle_call({:entries}, _from, %Todo.List{} = state) do
-    {:reply, Todo.List.entries(state), state}
+  def handle_info(:long_running_init, {name, _list}) do
+    {:noreply, {name, DB.get(name) || Todo.List.new()}}
   end
 
   @impl GenServer
-  def handle_call({:entries, date}, _from, %Todo.List{} = state) do
-    {:reply, Todo.List.entries(state, date), state}
+  def handle_call({:entries}, _from, {_name, %Todo.List{} = list} = state) do
+    {:reply, Todo.List.entries(list), state}
   end
 
   @impl GenServer
-  def handle_cast({:add_entry, entry}, %Todo.List{} = state) do
-    {:noreply, Todo.List.add_entry(state, entry)}
+  def handle_call({:entries, date}, _from, {_name, %Todo.List{} = list} = state) do
+    {:reply, Todo.List.entries(list, date), state}
   end
 
   @impl GenServer
-  def handle_cast({:update_entry, entry}, %Todo.List{} = state) do
-    {:noreply, Todo.List.update_entry(state, entry)}
+  def handle_cast({:add_entry, entry}, {name, %Todo.List{} = list}) do
+    new_list = Todo.List.add_entry(list, entry)
+    DB.store(name, new_list)
+    {:noreply, {name, new_list}}
   end
 
   @impl GenServer
-  def handle_cast({:delete_entry, entry_id}, %Todo.List{} = state) do
-    {:noreply, Todo.List.delete_entry(state, entry_id)}
+  def handle_cast({:update_entry, entry}, {name, %Todo.List{} = list}) do
+    new_list = Todo.List.update_entry(list, entry)
+    DB.store(name, new_list)
+    {:noreply, {name, new_list}}
+  end
+
+  @impl GenServer
+  def handle_cast({:delete_entry, entry_id}, {name, %Todo.List{} = list}) do
+    new_list = Todo.List.delete_entry(list, entry_id)
+    DB.store(name, new_list)
+    {:noreply, {name, new_list}}
   end
 end
