@@ -6,8 +6,9 @@ defmodule Todo.Database do
   @db_folder "./persist"
   @pool_size 3
 
-  def start do
-    GenServer.start(__MODULE__, nil, name: __MODULE__)
+  def start_link do
+    IO.puts("Starting database server")
+    GenServer.start_link(__MODULE__, nil, name: __MODULE__)
   end
 
   def store(key, data) do
@@ -47,7 +48,7 @@ defmodule Todo.Database do
   def spawn_workers do
     0..(@pool_size - 1)
     |> Enum.reduce(%{}, fn index, map ->
-      {:ok, worker_pid} = Worker.start(@db_folder)
+      {:ok, worker_pid} = Worker.start_link(@db_folder)
       Map.put(map, index, worker_pid)
     end)
   end

@@ -5,10 +5,12 @@ defmodule Todo.Server do
 
   # Api
 
-  def start(name) do
-    GenServer.start(__MODULE__, name)
+  def start_link(name) do
+    IO.puts("Starting to-do server for #{name}")
+    GenServer.start_link(__MODULE__, name)
   end
 
+  @spec add_entry(atom | pid | {atom, any} | {:via, atom, any}, any) :: :ok
   def add_entry(pid, entry) do
     GenServer.cast(pid, {:add_entry, entry})
   end
