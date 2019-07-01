@@ -7,6 +7,7 @@ defmodule Todo.System do
 
   def init(_) do
     children = [
+      Todo.Metrics,
       Todo.ProcessRegistry,
       Todo.Database,
       Todo.Cache

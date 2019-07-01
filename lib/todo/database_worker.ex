@@ -39,7 +39,7 @@ defmodule Todo.DatabaseWorker do
   @impl GenServer
   def handle_call({:get, key}, _from, folder) do
     data =
-      case File.read(file_name(folder, key)) do
+      case File.read(file_name(key, folder)) do
         {:ok, contents} -> :erlang.binary_to_term(contents)
         _ -> nil
       end
@@ -47,7 +47,7 @@ defmodule Todo.DatabaseWorker do
     {:reply, data, folder}
   end
 
-  defp file_name(folder, key) do
+  defp file_name(key, folder) do
     Path.join(folder, to_string(key))
   end
 end

@@ -1,77 +1,54 @@
 defmodule Todo.Server do
-  use GenServer, restart: :temporary
+  use Agent, restart: :temporary
 
   alias Todo.Database, as: DB
 
   # Api
 
   def start_link(name) do
-    IO.puts("Starting to-do server for #{name}")
-    GenServer.start_link(__MODULE__, name, name: via_tuple(name))
+    Agent.start_link(
+      fn ->
+        IO.puts("Starting to-do server for #{name}")
+        {name, DB.get(name) || Todo.List.new()}
+      end,
+      name: via_tuple(name)
+    )
   end
 
   def add_entry(pid, entry) do
-    GenServer.cast(pid, {:add_entry, entry})
+    Agent.cast(pid, fn {name, %Todo.List{} = list} ->
+      new_list = Todo.List.add_entry(list, entry)
+      DB.store(name, new_list)
+      {name, new_list}
+    end)
   end
 
   def entries(pid, date) do
-    GenServer.call(pid, {:entries, date})
+    Agent.get(pid, fn {_name, %Todo.List{} = list} ->
+      Todo.List.entries(list, date)
+    end)
   end
 
   def entries(pid) do
-    GenServer.call(pid, {:entries})
+    Agent.get(pid, fn {_name, %Todo.List{} = list} ->
+      Todo.List.entries(list)
+    end)
   end
 
   def update_entry(pid, entry) do
-    GenServer.cast(pid, {:update_entry, entry})
+    Agent.cast(pid, fn {name, %Todo.List{} = list} ->
+      new_list = Todo.List.update_entry(list, entry)
+      DB.store(name, new_list)
+      {name, new_list}
+    end)
   end
 
   def delete_entry(pid, entry_id) do
-    GenServer.cast(pid, {:delete_entry, entry_id})
-  end
-
-  # Server
-
-  @impl GenServer
-  def init(name) do
-    send(self(), :long_running_init)
-    {:ok, {name, nil}}
-  end
-
-  @impl GenServer
-  def handle_info(:long_running_init, {name, _list}) do
-    {:noreply, {name, DB.get(name) || Todo.List.new()}}
-  end
-
-  @impl GenServer
-  def handle_call({:entries}, _from, {_name, %Todo.List{} = list} = state) do
-    {:reply, Todo.List.entries(list), state}
-  end
-
-  @impl GenServer
-  def handle_call({:entries, date}, _from, {_name, %Todo.List{} = list} = state) do
-    {:reply, Todo.List.entries(list, date), state}
-  end
-
-  @impl GenServer
-  def handle_cast({:add_entry, entry}, {name, %Todo.List{} = list}) do
-    new_list = Todo.List.add_entry(list, entry)
-    DB.store(name, new_list)
-    {:noreply, {name, new_list}}
-  end
-
-  @impl GenServer
-  def handle_cast({:update_entry, entry}, {name, %Todo.List{} = list}) do
-    new_list = Todo.List.update_entry(list, entry)
-    DB.store(name, new_list)
-    {:noreply, {name, new_list}}
-  end
-
-  @impl GenServer
-  def handle_cast({:delete_entry, entry_id}, {name, %Todo.List{} = list}) do
-    new_list = Todo.List.delete_entry(list, entry_id)
-    DB.store(name, new_list)
-    {:noreply, {name, new_list}}
+    Agent.cast(pid, fn {name, %Todo.List{} = list} ->
+      new_list = Todo.List.delete_entry(list, entry_id)
+      DB.store(name, new_list)
+      {name, new_list}
+    end)
   end
 
   # Private
