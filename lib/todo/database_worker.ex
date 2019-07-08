@@ -3,12 +3,11 @@ defmodule Todo.DatabaseWorker do
 
   # API
   def start_link(folder: folder) do
-    IO.puts("Starting database worker")
     GenServer.start_link(__MODULE__, folder)
   end
 
   def store(pid, key, data) do
-    GenServer.cast(pid, {:store, key, data})
+    GenServer.call(pid, {:store, key, data})
   end
 
   def get(pid, key) do
@@ -19,18 +18,18 @@ defmodule Todo.DatabaseWorker do
 
   @impl GenServer
   def init(folder) do
+    IO.puts("Starting database worker")
     {:ok, folder}
   end
 
 
   @impl GenServer
-  def handle_cast({:store, key, data}, folder) do
-    # database worker per request
+  def handle_call({:store, key, data}, _from, folder) do
     key
     |> file_name(folder)
     |> File.write!(:erlang.term_to_binary(data))
 
-    {:noreply, folder}
+    {:reply, :ok, folder}
   end
 
   @impl GenServer

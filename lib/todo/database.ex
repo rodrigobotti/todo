@@ -1,8 +1,24 @@
 defmodule Todo.Database do
-  @db_folder "./persist"
-  @pool_size 3
-
   def store(key, data) do
+    # replicates data across the cluster.
+    # in a production-ready system we should handle cases of partial success
+    # otherwise we end up with an inconsistent cluster.
+    # possible solutions: 2-phase-commit + log-based database implementation
+    {_results, bad_nodes} =
+      :rpc.multicall(
+        __MODULE__,
+        :store_local,
+        [key, data],
+        :timer.seconds(5)
+      )
+
+    bad_nodes
+    |> Enum.each(&IO.puts("Store failed on node #{&1}"))
+
+    :ok
+  end
+
+  def store_local(key, data) do
     # asks pool for a single worker
     :poolboy.transaction(
       __MODULE__,
@@ -24,17 +40,24 @@ defmodule Todo.Database do
   end
 
   def child_spec(_) do
-    File.mkdir_p!(@db_folder)
+    db_settings = Application.fetch_env!(:todo, :database)
+    [name_prefix, _] = "#{node()}" |> String.split("@")
+    db_folder = "#{Keyword.fetch!(db_settings, :folder)}/#{name_prefix}/"
+
+    File.mkdir_p!(db_folder)
 
     :poolboy.child_spec(
-      __MODULE__, # child id
+      # child id
+      __MODULE__,
       # pool options
       [
-        name: {:local, __MODULE__}, # pool manager locally registered
+        # pool manager locally registered
+        name: {:local, __MODULE__},
         worker_module: Todo.DatabaseWorker,
-        size: @pool_size
+        size: Keyword.fetch!(db_settings, :pool_size)
       ],
-      [folder: @db_folder] # worker arguments passed to start_link
+      # worker arguments passed to start_link
+      folder: db_folder
     )
   end
 end

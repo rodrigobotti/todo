@@ -25,3 +25,4 @@ todo-*.tar
 .elixir_ls
 
 persist
+test_persist
