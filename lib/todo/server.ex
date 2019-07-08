@@ -3,12 +3,11 @@ defmodule Todo.Server do
 
   alias Todo.Database, as: DB
 
-  @expiry_idle_timeout :timer.seconds(10)
+  @expiry_idle_timeout :timer.minutes(5)
 
   # Api
 
   def start_link(name) do
-    IO.puts("Starting to-do server for #{name}")
     GenServer.start_link(__MODULE__, name, name: via_tuple(name))
   end
 
@@ -36,6 +35,7 @@ defmodule Todo.Server do
 
   @impl GenServer
   def init(name) do
+    IO.puts("Starting to-do server for #{name}")
     send(self(), :long_running_init)
     {:ok, {name, nil}, @expiry_idle_timeout}
   end

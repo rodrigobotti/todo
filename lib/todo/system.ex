@@ -10,7 +10,8 @@ defmodule Todo.System do
       Todo.Metrics,
       Todo.ProcessRegistry,
       Todo.Database,
-      Todo.Cache
+      Todo.Cache,
+      Todo.Web
     ]
     Supervisor.init(children, strategy: :one_for_one)
   end
